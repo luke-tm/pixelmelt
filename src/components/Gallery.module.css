@@ -1,0 +1,44 @@
+.section {
+  width: 100%;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px 64px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+
+.title {
+  font-size: 1.25rem;
+  font-weight: 700;
+  color: #f0f0f0;
+}
+
+.count {
+  font-size: 0.85rem;
+  color: #666;
+}
+
+.grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 16px;
+}
+
+.empty {
+  text-align: center;
+  padding: 80px 24px;
+  color: #555;
+  font-size: 0.95rem;
+}
+
+.loadMoreHint {
+  margin-top: 32px;
+  text-align: center;
+  color: #555;
+  font-size: 0.8rem;
+}
