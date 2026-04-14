@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <meta name="theme-color" content="#000080">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black">
+  <meta name="apple-mobile-web-app-title" content="PixelMelt">
+  <meta name="description" content="90s-style mobile photo effects">
+  <link rel="manifest" href="manifest.json">
+  <link rel="apple-touch-icon" href="assets/icons/icon-192.png">
+  <link rel="stylesheet" href="css/style.css">
+  <title>PixelMelt v3.0</title>
+</head>
+<body>
+
+<header class="site-header">
+  <div class="marquee-wrap">
+    <div class="marquee-inner">★ PIXELMELT ★ PHOTO EFFECTS FOR THE MASSES ★ EST. 1996 ★ PIXELMELT ★ PHOTO EFFECTS FOR THE MASSES ★ EST. 1996 ★</div>
+  </div>
+  <div class="header-title-row">
+    <h1 class="site-title"><span class="rainbow-text">PixelMelt</span></h1>
+    <div class="header-badge">v3.0</div>
+  </div>
+  <div class="tagline">~*~ Turn Your Photos Into Warped Stickers ~*~</div>
+</header>
+
+<div class="construction-banner">
+  <div class="construction-stripe"></div>
+  <span class="construction-text">⚠ UNDER CONSTRUCTION — NEW EFFECTS COMING SOON ⚠</span>
+  <div class="construction-stripe"></div>
+</div>
+
+<!-- UPLOAD — hidden by default, shown by JS init -->
+<section id="section-upload" class="app-section" style="display:none;">
+  <div class="panel raised">
+    <div class="panel-titlebar">
+      <span class="titlebar-icon">📁</span>
+      <span>Upload Photo</span>
+    </div>
+    <div class="panel-body">
+      <div class="upload-area" id="upload-area">
+        <div class="upload-icon">🖼️</div>
+        <div class="upload-label">Tap to choose a photo<br><span class="upload-sub">or drag a photo here</span></div>
+        <div class="upload-hint">Best results: full-body photos with a clear background</div>
+        <input type="file" id="file-input-tap" accept="image/*" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+      </div>
+      <div class="button-row" style="margin-top:10px;">
+        <label class="btn-90s btn-primary" style="position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;">
+          📂 Browse Files
+          <input type="file" id="file-input-browse" accept="image/*" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+        </label>
+        <label class="btn-90s" style="position:relative;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;overflow:hidden;">
+          📷 Camera
+          <input type="file" id="file-input-camera" accept="image/*" capture="environment" style="position:absolute;top:0;left:0;width:100%;height:100%;opacity:0;cursor:pointer;">
+        </label>
+      </div>
+    </div>
+  </div>
+
+  <div class="panel raised">
+    <div class="panel-titlebar">
+      <span class="titlebar-icon">⚙️</span>
+      <span>Effect Settings</span>
+    </div>
+    <div class="panel-body">
+      <div class="effect-description">
+        AI removes the background, then content-aware scaling squishes the subject's face and body.
+        Output is a transparent PNG sticker. 🌀
+      </div>
+      <div class="form-group" style="margin-top:12px;">
+        <label class="form-label">Squeeze amount: <span id="intensity-display" class="mono-value">30%</span></label>
+        <div class="slider-track">
+          <input type="range" id="intensity-slider" min="10" max="60" value="30" step="5" class="slider-90s">
+        </div>
+        <div class="slider-labels"><span>Mild</span><span>Meme</span><span>EXTREME</span></div>
+      </div>
+      <div class="hint-text">⏱ First use: ~10s to load AI model</div>
+    </div>
+  </div>
+
+  <div class="panel raised" id="preview-panel" style="display:none;">
+    <div class="panel-titlebar"><span>Preview</span></div>
+    <div class="panel-body">
+      <canvas id="preview-canvas" class="preview-canvas"></canvas>
+      <div class="button-row" style="margin-top:12px;">
+        <button class="btn-90s btn-primary btn-big" id="btn-process">⚡ MELT IT!</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="nav-row">
+    <button class="btn-90s" id="btn-goto-gallery">🖼 View Gallery</button>
+  </div>
+</section>
+
+<!-- LOADING -->
+<section id="section-loading" class="app-section" style="display:none;">
+  <div class="panel raised" style="margin-top:24px;">
+    <div class="panel-titlebar"><span>⏳ Processing...</span></div>
+    <div class="panel-body">
+      <div class="loading-screen">
+        <div class="loading-title" id="loading-title">Initializing...</div>
+        <div class="progress-bar-wrap">
+          <div class="progress-bar-fill" id="progress-bar"></div>
+        </div>
+        <div class="progress-text" id="progress-text">0%</div>
+        <div class="loading-detail" id="loading-detail">Please wait... 56k modem noises...</div>
+        <div class="loading-ascii"><pre>
+  ___  _          _ __  __  _ _
+ | _ \(_)__ ___  | |  \/  |___| |_
+ |  _/| |\ \ /__|_| |\/| / -_) | |
+ |_|  |_|/_\_\___(_)_|  |_\___|_|_|
+        </pre></div>
+        <button class="btn-90s btn-danger" id="btn-cancel">✕ Cancel</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- RESULT -->
+<section id="section-result" class="app-section" style="display:none;">
+  <div class="panel raised">
+    <div class="panel-titlebar">
+      <span>✨ Result</span>
+      <div class="titlebar-buttons">
+        <span class="win-btn"></span><span class="win-btn"></span><span class="win-btn win-btn-close"></span>
+      </div>
+    </div>
+    <div class="panel-body">
+      <div class="filmstrip-frame checkerboard-bg">
+        <canvas id="result-canvas" class="result-canvas"></canvas>
+      </div>
+      <div class="result-stats" id="result-stats"></div>
+      <div class="button-row">
+        <button class="btn-90s btn-primary btn-big" id="btn-download">💾 SAVE STICKER (PNG)</button>
+      </div>
+      <div class="button-row" style="margin-top:8px;">
+        <button class="btn-90s btn-adjust" id="btn-adjust">🎚️ Adjust Effect</button>
+        <button class="btn-90s" id="btn-new">🔄 New Photo</button>
+      </div>
+      <div class="button-row" style="margin-top:8px;">
+        <button class="btn-90s btn-gallery" id="btn-share">📢 Post to the GALLERY!!</button>
+      </div>
+    </div>
+  </div>
+  <div id="share-form" class="panel raised" style="display:none;margin-top:12px;">
+    <div class="panel-titlebar"><span>Share to Gallery</span></div>
+    <div class="panel-body">
+      <label class="form-label">Your name (optional):</label>
+      <input type="text" id="share-username" class="input-90s" placeholder="Anonymous" maxlength="20">
+      <div class="button-row" style="margin-top:8px;">
+        <button class="btn-90s btn-primary" id="btn-confirm-share">✓ Post It!</button>
+        <button class="btn-90s" id="btn-cancel-share">✗ Cancel</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- GALLERY -->
+<section id="section-gallery" class="app-section" style="display:none;">
+  <div class="panel raised">
+    <div class="panel-titlebar"><span>~*~ VISITOR CREATIONS ~*~</span></div>
+    <div class="panel-body">
+      <div class="gallery-header">
+        <span class="gallery-count" id="gallery-count">0 creations shared</span>
+        <button class="btn-90s btn-small" id="btn-clear-gallery">🗑 Clear</button>
+      </div>
+      <div id="gallery-grid" class="gallery-grid">
+        <div class="gallery-empty">No creations yet!<br>Be the first to share! ✨</div>
+      </div>
+      <div class="button-row" style="margin-top:12px;">
+        <button class="btn-90s" id="btn-back-from-gallery">← Back</button>
+      </div>
+    </div>
+  </div>
+</section>
+
+<footer class="site-footer">
+  <div class="footer-counter">You are visitor <span class="counter-digits" id="visitor-counter">00000</span></div>
+  <div class="footer-badge">
+    <span>This page best viewed in</span><br>
+    <strong>Netscape Navigator 4.0</strong><br>
+    <span>at 800x600 resolution</span>
+  </div>
+  <div class="footer-marquee">
+    <div class="marquee-inner marquee-slow">✦ PixelMelt v3.0 ✦ All Rights Reserved ✦ Made with ❤️ and too much caffeine ✦ No animals were harmed ✦</div>
+  </div>
+  <div class="footer-year">© <span id="footer-year"></span> PixelMelt Productions</div>
+</footer>
+
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@4.22.0/dist/tf.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@tensorflow-models/body-pix@2.2.0/dist/body-pix.min.js"></script>
+<script src="js/utils.js"></script>
+<script src="js/segmentation.js"></script>
+<script src="js/effects/effectRegistry.js"></script>
+<script src="js/effects/seamCarve.js"></script>
+<script src="js/gallery.js"></script>
+<script src="js/app.js"></script>
+
+</body>
+</html>
