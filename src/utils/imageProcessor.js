@@ -2,24 +2,30 @@
  * Multi-step image processing: resize, colour-correct, sharpen, encode.
  * Progress is reported after each distinct step so the UI bar advances smoothly.
  */
+
+// iOS Safari tiles GPU textures above 4096 px in either dimension, producing
+// visible seam lines at every tile boundary in the encoded output.
+// Clamp to this limit so the entire image fits in a single GPU tile.
+const MAX_DIMENSION = 2048;
+
 export async function processImage(file, onProgress) {
   // Step 1 – fully decode the image before touching any pixels.
-  // createImageBitmap() can resolve before decoding is complete on some
-  // browsers, causing partial-decode artefacts (horizontal breaks) when the
-  // bitmap is drawn to canvas. img.decode() guarantees the full pixel data
-  // is ready before the promise resolves.
   onProgress(5);
   const { img, objectUrl } = await loadImage(file);
 
-  // Step 2 – draw onto a canvas at native resolution
+  // Step 2 – draw at a safe canvas resolution.
+  // Passing explicit target dimensions to drawImage prevents sub-pixel
+  // rounding discrepancies when the browser picks an intermediate size.
   onProgress(25);
+  const { width, height } = fitWithin(img.naturalWidth, img.naturalHeight, MAX_DIMENSION);
   const canvas = document.createElement('canvas');
-  canvas.width = img.naturalWidth;
-  canvas.height = img.naturalHeight;
+  canvas.width = width;
+  canvas.height = height;
   const ctx = canvas.getContext('2d');
-  ctx.drawImage(img, 0, 0);
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = 'high';
+  ctx.drawImage(img, 0, 0, width, height);
 
-  // The object URL is no longer needed once the image is drawn
   URL.revokeObjectURL(objectUrl);
 
   // Step 3 – colour correction (simulated delay)
@@ -42,15 +48,27 @@ export async function processImage(file, onProgress) {
     originalSize: file.size,
     processedSize: blob.size,
     url: URL.createObjectURL(blob),
-    width: img.naturalWidth,
-    height: img.naturalHeight,
+    width,
+    height,
     processedAt: new Date().toISOString(),
   };
 }
 
 /**
+ * Scale dimensions down so neither side exceeds maxDimension.
+ * Returns original dimensions if already within bounds.
+ */
+function fitWithin(w, h, maxDimension) {
+  const scale = Math.min(1, maxDimension / w, maxDimension / h);
+  return {
+    width: Math.round(w * scale),
+    height: Math.round(h * scale),
+  };
+}
+
+/**
  * Load a File into an HTMLImageElement and wait for full pixel decode.
- * img.decode() is supported in all modern browsers including iOS Safari 12+.
+ * img.decode() guarantees the complete pixel buffer is ready before resolving.
  */
 async function loadImage(file) {
   const img = new Image();

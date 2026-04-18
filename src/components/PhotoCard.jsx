@@ -10,7 +10,8 @@ export default function PhotoCard({ photo }) {
           src={photo.url}
           alt={photo.name}
           className={styles.image}
-          loading="lazy"
+          loading="eager"
+          decoding="async"
         />
       </div>
       <div className={styles.meta}>
