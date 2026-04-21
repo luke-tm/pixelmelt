@@ -15,7 +15,12 @@ export default function PhotoCard({ photo }) {
         />
       </div>
       <div className={styles.meta}>
-        <p className={styles.name} title={photo.name}>{photo.name}</p>
+        <div className={styles.nameRow}>
+          <p className={styles.name} title={photo.name}>{photo.name}</p>
+          {photo.caricature && (
+            <span className={styles.badge} title="Caricature applied">🎭</span>
+          )}
+        </div>
         <div className={styles.stats}>
           <span>{photo.width} × {photo.height}</span>
           <span className={styles.dot}>·</span>

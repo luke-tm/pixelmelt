@@ -28,6 +28,13 @@
   padding: 10px 12px;
 }
 
+.nameRow {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
 .name {
   font-size: 0.85rem;
   font-weight: 500;
@@ -35,6 +42,12 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  flex: 1;
+}
+
+.badge {
+  font-size: 0.85rem;
+  flex-shrink: 0;
 }
 
 .stats {
