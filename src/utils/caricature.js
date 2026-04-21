@@ -4,7 +4,6 @@ let modelsLoaded = false;
 
 export async function loadModels() {
   if (modelsLoaded) return;
-  // BASE_URL is '/pixelmelt/' on GitHub Pages, '/' in dev
   const MODEL_URL = `${import.meta.env.BASE_URL}models`;
   await Promise.all([
     faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
@@ -15,31 +14,34 @@ export async function loadModels() {
 
 /**
  * Detect the primary face + landmarks on a canvas element.
- * Returns the detection result, or null if no face is found.
+ * Tries three input sizes with a low score threshold so faces with
+ * sunglasses or partial occlusion are still picked up.
  */
 export async function detectFace(canvas) {
-  const opts = new faceapi.TinyFaceDetectorOptions({
-    inputSize: 416,
-    scoreThreshold: 0.4,
-  });
-  const result = await faceapi
-    .detectSingleFace(canvas, opts)
-    .withFaceLandmarks(true);
-  return result ?? null;
+  for (const inputSize of [416, 512, 320]) {
+    const opts = new faceapi.TinyFaceDetectorOptions({
+      inputSize,
+      scoreThreshold: 0.25,
+    });
+    const result = await faceapi
+      .detectSingleFace(canvas, opts)
+      .withFaceLandmarks(true);
+    if (result) return result;
+  }
+  return null;
 }
 
 /**
- * Apply a two-stage caricature effect in-place on `canvas`:
- *   1. Big-head: scale the head region to ~60 % of the canvas height.
- *   2. Feature bulge: magnify eyes and mouth in the enlarged head.
+ * Apply caricature in-place on `canvas`:
+ *   1. Big-head: head region → 60 % of canvas height.
+ *   2. Feature bulge: eyes and mouth magnified within the enlarged head.
  *
- * If detection is null the canvas is returned unchanged.
+ * When no face is detected a position-based fallback is used for stage 1
+ * (top ~33 % of the image treated as the head). Stage 2 is skipped.
  */
 export function applyCaricature(canvas, detection) {
-  if (!detection) return;
-
   bigHeadComposite(canvas, detection);
-  featureBulge(canvas, detection);
+  if (detection) featureBulge(canvas, detection);
 }
 
 // ─── Stage 1: big-head composite ────────────────────────────────────────────
@@ -47,29 +49,43 @@ export function applyCaricature(canvas, detection) {
 function bigHeadComposite(canvas, detection) {
   const { width, height } = canvas;
   const ctx = canvas.getContext('2d');
-  const { box } = detection;
 
-  // Pad the raw face box to include forehead, hair and chin
-  const padX    = box.width  * 0.30;
-  const padTop  = box.height * 0.55;   // generous top for hair
-  const padBot  = box.height * 0.20;
+  let headTop, headBottom, headLeft, headRight;
 
-  const headTop    = Math.max(0, box.y - padTop);
-  const headBottom = Math.min(height, box.y + box.height + padBot);
-  const headLeft   = Math.max(0, box.x - padX);
-  const headRight  = Math.min(width,  box.x + box.width  + padX);
-  const headW      = headRight - headLeft;
-  const headH      = headBottom - headTop;
+  if (detection) {
+    const { box } = detection;
+    // Keep padding tight so headH ≈ actual head, not a large inflated region.
+    // Previous values (padTop = 0.55×) made headH much larger than the true
+    // head, which drove scale close to 1× and produced almost no enlargement.
+    const padTop = box.height * 0.35; // forehead / hair
+    const padBot = box.height * 0.08; // chin
+    const padX   = box.width  * 0.18; // sides
 
-  const TARGET_HEAD_FRAC = 0.60;
-  const targetHeadH = height * TARGET_HEAD_FRAC;
-  const scale       = targetHeadH / headH;
-  const scaledW     = headW * scale;
+    headTop    = Math.max(0,      box.y - padTop);
+    headBottom = Math.min(height, box.y + box.height + padBot);
+    headLeft   = Math.max(0,      box.x - padX);
+    headRight  = Math.min(width,  box.x + box.width + padX);
+  } else {
+    // Fallback: no face detected — assume head occupies the top third.
+    headTop    = 0;
+    headBottom = Math.round(height * 0.33);
+    headLeft   = 0;
+    headRight  = width;
+  }
 
-  const destHeadX  = (width - scaledW) / 2;
-  const destBodyY  = targetHeadH;
-  const srcBodyH   = height - headBottom;
-  const dstBodyH   = height - destBodyY;
+  const headW = headRight - headLeft;
+  const headH = headBottom - headTop;
+
+  const targetHeadH = height * 0.60;
+  // Always scale UP. Even if the detector over-estimates headH we never
+  // shrink below 1.8× so the big-head effect is always visible.
+  const scale   = Math.max(1.8, targetHeadH / headH);
+  const scaledW = headW * scale;
+
+  const destHeadX = (width - scaledW) / 2; // may be negative — that's fine, canvas clips
+  const destBodyY = targetHeadH;
+  const srcBodyH  = height - headBottom;
+  const dstBodyH  = height - destBodyY;
 
   const out    = document.createElement('canvas');
   out.width    = width;
@@ -78,7 +94,7 @@ function bigHeadComposite(canvas, detection) {
   outCtx.imageSmoothingEnabled = true;
   outCtx.imageSmoothingQuality = 'high';
 
-  // Body: original pixels below the head region
+  // Body — everything below the head, compressed into the bottom 40 %
   if (srcBodyH > 0 && dstBodyH > 0) {
     outCtx.drawImage(
       canvas,
@@ -87,14 +103,14 @@ function bigHeadComposite(canvas, detection) {
     );
   }
 
-  // Head: scaled up, centred horizontally
+  // Head — scaled up, centred horizontally
   outCtx.drawImage(
     canvas,
-    headLeft, headTop, headW, headH,
+    headLeft, headTop, headW,    headH,
     destHeadX, 0,      scaledW, targetHeadH,
   );
 
-  // Store the mapping so Stage 2 can remap landmarks
+  // Persist mapping so featureBulge can remap landmarks into new head-space
   canvas._headMap = { headLeft, headTop, headW, headH, scaledW, targetHeadH, destHeadX };
 
   ctx.clearRect(0, 0, width, height);
@@ -107,7 +123,7 @@ function featureBulge(canvas, detection) {
   const map = canvas._headMap;
   const lm  = detection.landmarks;
 
-  // Remap a landmark point from original-image space into the new head space
+  // Remap a landmark from original-image space into the scaled head-space
   function remap(p) {
     const relX = (p.x - map.headLeft) / map.headW;
     const relY = (p.y - map.headTop)  / map.headH;
@@ -126,21 +142,16 @@ function featureBulge(canvas, detection) {
   }
 
   const features = [
-    featureDesc(lm.getLeftEye(),  3.2, 0.60),
-    featureDesc(lm.getRightEye(), 3.2, 0.60),
-    featureDesc(lm.getMouth(),    2.4, 0.52),
+    featureDesc(lm.getLeftEye(),  5.5, 0.74),
+    featureDesc(lm.getRightEye(), 5.5, 0.74),
+    featureDesc(lm.getMouth(),    4.2, 0.70),
   ];
 
   applyBulge(canvas, features);
 }
 
-/**
- * Radial bulge (magnifying-lens) distortion.
- * For each output pixel inside a feature's radius, the source coordinate is
- * pulled toward the feature centre, making the region appear larger.
- *
- * strength: 0 = no effect, 1 = extreme bulge.
- */
+// ─── Radial bulge distortion ──────────────────────────────────────────────────
+
 function applyBulge(canvas, features) {
   const { width, height } = canvas;
   const ctx = canvas.getContext('2d');
